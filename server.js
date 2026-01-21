@@ -12,8 +12,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const io = new Server(server, {
   cors: {
-    // your Netlify URL, NO trailing slash
-    origin: "https://mngoweby.netlify.app",
+    origin: "*",              // <-- change this for debugging
     methods: ["GET", "POST"],
   },
 });
