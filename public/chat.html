@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Marco's Lab · Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #2d3436 0, #050510 45%, #000 100%);
+      color: #f5f5f5;
+    }
+    .shell {
+      width: min(800px, 100%);
+      padding: 24px;
+    }
+    .card {
+      background: rgba(10,10,25,0.9);
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 20px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.65);
+      backdrop-filter: blur(16px);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .header h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+    .status {
+      font-size: 12px;
+      color: #b2bec3;
+      margin-bottom: 10px;
+    }
+    .status span.dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      background: #ff7675;
+      box-shadow: 0 0 12px rgba(255,118,117,0.9);
+    }
+    .status.connected span.dot {
+      background: #00cec9;
+      box-shadow: 0 0 12px rgba(0,206,201,0.9);
+    }
+    .messages {
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.55);
+      padding: 12px;
+      height: 320px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .msg {
+      margin-bottom: 8px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    .msg.me { text-align: right; }
+    .msg .meta {
+      font-size: 10px;
+      color: #636e72;
+    }
+    .msg .bubble {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 14px;
+      margin-bottom: 2px;
+      max-width: 80%;
+    }
+    .msg.me .bubble {
+      background: linear-gradient(135deg, #6c5ce7, #00cec9);
+    }
+    .msg.other .bubble {
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    input, button { font-family: inherit; font-size: 13px; }
+    #name {
+      width: 130px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.7);
+      color: #f5f5f5;
+      outline: none;
+    }
+    #message {
+      flex: 1;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.7);
+      color: #f5f5f5;
+      outline: none;
+    }
+    #send {
+      border-radius: 999px;
+      border: 0;
+      padding: 6px 14px;
+      background: linear-gradient(130deg, #6c5ce7, #00cec9);
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 10px 25px rgba(108, 92, 231, 0.5);
+    }
+  </style>
+</head>
+<body>
+	<div class="card">
+	  <div class="header">
+		<h1>Marco's Lab · Chat</h1>
+	  </div>
+
+	  <!-- NEW: access code row -->
+	  <div class="input-row" style="margin-bottom: 10px;">
+		<input id="access" placeholder="access code" />
+		<button id="join">Join chat</button>
+	  </div>
+
+	  <div id="status" class="status">
+		<span class="dot"></span>
+		Not connected
+	  </div>
+
+	  <div id="messages" class="messages"></div>
+
+	  <div class="input-row">
+		<input id="name" placeholder="your name" />
+		<input id="message" placeholder="type a message and hit enter" />
+		<button id="send">Send</button>
+	  </div>
+	</div>
+
+	<script src="/socket.io/socket.io.js"></script>
+	<script>
+	  const statusEl   = document.getElementById("status");
+	  const messagesEl = document.getElementById("messages");
+	  const nameEl     = document.getElementById("name");
+	  const msgEl      = document.getElementById("message");
+	  const sendBtn    = document.getElementById("send");
+	  const accessEl   = document.getElementById("access");
+	  const joinBtn    = document.getElementById("join");
+
+	  let socket = null;
+
+	  function setStatus(text, connected) {
+		if (connected) {
+		  statusEl.classList.add("connected");
+		} else {
+		  statusEl.classList.remove("connected");
+		}
+		statusEl.innerHTML = `<span class="dot"></span> ${text}`;
+	  }
+
+	  function connectWithToken(token) {
+		if (socket) {
+		  socket.disconnect();
+		  socket = null;
+		}
+
+		socket = io({
+		  auth: { token }
+		});
+
+		socket.on("connect", () => {
+		  setStatus("Connected as " + socket.id, true);
+		});
+
+		socket.on("disconnect", () => {
+		  setStatus("Disconnected. Trying to reconnect…", false);
+		});
+
+		socket.on("connect_error", (err) => {
+		  console.error("connect_error", err.message);
+		  setStatus("Access denied or server error.", false);
+		});
+
+		socket.on("chat-message", (data) => {
+		  addMessage(data, false);
+		});
+	  }
+
+	  joinBtn.addEventListener("click", () => {
+		const code = accessEl.value.trim();
+		if (!code) {
+		  setStatus("Enter an access code first.", false);
+		  return;
+		}
+		setStatus("Connecting…", false);
+		connectWithToken(code);
+	  });
+
+	  accessEl.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+		  e.preventDefault();
+		  joinBtn.click();
+		}
+	  });
+
+	  function addMessage({ name, message, id }, isMine) {
+		const wrapper = document.createElement("div");
+		wrapper.className = "msg " + (isMine ? "me" : "other");
+
+		const bubble = document.createElement("div");
+		bubble.className = "bubble";
+		bubble.textContent = message;
+
+		const meta = document.createElement("div");
+		meta.className = "meta";
+		meta.textContent = (name || "anon") + (isMine ? " · you" : " · " + (id || "").slice(0, 5));
+
+		wrapper.appendChild(bubble);
+		wrapper.appendChild(meta);
+		messagesEl.appendChild(wrapper);
+		messagesEl.scrollTop = messagesEl.scrollHeight;
+	  }
+
+	  function sendMessage() {
+		if (!socket || !socket.connected) {
+		  setStatus("You’re not connected. Enter the access code and join.", false);
+		  return;
+		}
+
+		const name = nameEl.value.trim() || "anon";
+		const message = msgEl.value.trim();
+		if (!message) return;
+
+		const payload = { name, message };
+		socket.emit("chat-message", payload);
+		addMessage({ ...payload, id: socket.id }, true);
+		msgEl.value = "";
+		msgEl.focus();
+	  }
+
+	  sendBtn.addEventListener("click", sendMessage);
+	  msgEl.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+		  e.preventDefault();
+		  sendMessage();
+		}
+	  });
+	</script>
+
+</body>
+</html>
